@@ -2,177 +2,94 @@
 <html lang="uk">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>Сканер Штрих-коду</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Повертаємося до QuaggaJS, оскільки він більш стабільний -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/quagga/0.12.1/quagga.min.js"></script>
     <style>
-        /* Стилі для повноекранного режиму та анімації */
-        body, html {
-            margin: 0;
-            padding: 0;
-            overflow: hidden;
-            height: 100%;
-            width: 100%;
-            background-color: #000;
-        }
-        #scanner-container {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-        }
-        #scanner-container video, #scanner-container canvas {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-        }
-        .drawingBuffer {
-            display: none;
-        }
-        .laser {
-            position: absolute;
-            top: 50%;
-            left: 10%;
-            right: 10%;
-            height: 2px;
-            background-color: red;
-            box-shadow: 0 0 10px red;
-            animation: scanning 2s infinite linear;
-        }
-        @keyframes scanning {
-            0% { top: 20%; }
-            50% { top: 80%; }
-            100% { top: 20%; }
-        }
-        #close-btn {
-            position: absolute;
-            top: 20px;
-            right: 20px;
-            width: 40px;
-            height: 40px;
-            background-color: rgba(0,0,0,0.5);
-            color: white;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 24px;
-            font-weight: bold;
-            cursor: pointer;
-            z-index: 20;
-        }
+        body, html { margin: 0; padding: 0; overflow: hidden; height: 100%; width: 100%; background-color: #000; }
+        #scanner-container { position: fixed; top: 0; left: 0; width: 100%; height: 100%; }
+        #scanner-container video, #scanner-container canvas { width: 100%; height: 100%; object-fit: cover; }
+        /* Canvas потрібен для QuaggaJS, але ми його не показуємо */
+        .drawingBuffer { display: none; }
+        #close-btn { position: absolute; top: 20px; right: 20px; width: 40px; height: 40px; background-color: rgba(0,0,0,0.5); color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 24px; font-weight: bold; cursor: pointer; z-index: 20; }
+        #status-message { position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%); background-color: rgba(0,0,0,0.7); color: white; padding: 10px 20px; border-radius: 10px; z-index: 20; }
     </style>
 </head>
-<body class="bg-black">
-
-    <!-- Контейнер для сканера, що займає весь екран -->
-    <div id="scanner-container">
-        <!-- Елемент, в якому буде відображатись відео з камери -->
-        <div id="interactive" class="viewport"></div>
-        <!-- Анімована лінія сканування -->
-        <div class="laser"></div>
-    </div>
-    
-    <!-- Кнопка закриття -->
+<body>
+    <div id="scanner-container"></div>
     <div id="close-btn" onclick="closeScanner()">×</div>
-
-    <!-- Новий блок для відображення помилок -->
-    <div id="error-message" class="hidden fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-11/12 max-w-sm bg-red-600 text-white p-6 rounded-xl shadow-2xl text-center z-30">
-        <h3 class="font-bold text-lg mb-2">Помилка камери</h3>
-        <p id="error-text"></p>
-    </div>
-
+    <div id="status-message">Запуск камери...</div>
 
     <script>
-        // Функція для закриття веб-додатку
+        const statusMessage = document.getElementById('status-message');
+
         function closeScanner() {
             try {
-                // Цей метод підтримується в Telegram Web App
+                Quagga.stop();
                 if (window.Telegram && window.Telegram.WebApp) {
                     window.Telegram.WebApp.close();
                 } else {
-                    // Запасний варіант для звичайних браузерів
                     window.close();
                 }
             } catch (e) {
-                console.error("Failed to close window:", e);
+                console.error("Failed to close or stop scanner:", e);
             }
         }
 
-        document.addEventListener("DOMContentLoaded", function() {
+        function startScanner() {
             Quagga.init({
                 inputStream: {
                     name: "Live",
                     type: "LiveStream",
                     target: document.querySelector('#scanner-container'),
+                    // --- ВИПРАВЛЕННЯ ТУТ ---
+                    // Максимально спрощені вимоги до камери для кращої сумісності
                     constraints: {
-                        // --- ГОЛОВНА ЗМІНА: Прибираємо жорсткі вимоги ---
-                        // Тепер браузер сам обере найкраще розширення
-                        facingMode: "environment" 
+                        facingMode: "environment" // Тільки просимо задню камеру
                     },
                 },
                 decoder: {
-                     readers: [
-                        "code_128_reader",
-                        "ean_reader",
-                        "ean_8_reader",
-                        "code_39_reader",
-                        "code_39_vin_reader",
-                        "codabar_reader",
-                        "upc_reader",
-                        "upc_e_reader",
-                        "i2of5_reader"
-                    ]
+                    readers: ["ean_reader", "upc_reader", "code_128_reader"]
                 },
+                locate: true,
+                locator: {
+                    patchSize: "medium",
+                    halfSample: true,
+                },
+                numOfWorkers: navigator.hardwareConcurrency || 4,
             }, function(err) {
                 if (err) {
-                    console.error("Quagga initialization error:", err);
-                    const errorDiv = document.getElementById('error-message');
-                    const errorText = document.getElementById('error-text');
-                    let message = 'Не вдалося запустити камеру.';
-                    
-                    if (err.name === "NotAllowedError") {
-                        message = "Ви не надали дозвіл на використання камери. Будь ласка, перезавантажте сторінку та надайте дозвіл.";
-                    } else if (err.name === "NotFoundError" || err.name === "OverconstrainedError") {
-                        message = "Не знайдено підходящу камеру на вашому пристрої. Можливо, задня камера не підтримується.";
-                    } else if (err.name === "NotReadableError") {
-                        message = "Помилка обладнання. Неможливо отримати доступ до камери. Спробуйте закрити інші програми, що її використовують.";
-                    } else {
-                         message = `Сталася непередбачена помилка: ${err.name}. Спробуйте перезавантажити сторінку.`;
-                    }
-                    
-                    errorText.textContent = message;
-                    errorDiv.classList.remove('hidden');
-                    document.getElementById('scanner-container').style.display = 'none'; // Ховаємо чорний екран
+                    console.error("Quagga initialization failed:", err);
+                    statusMessage.textContent = 'Помилка запуску камери.';
                     return;
                 }
                 console.log("Initialization finished. Ready to start");
                 Quagga.start();
+                statusMessage.textContent = 'Наведіть камеру на штрих-код';
             });
 
-            // Коли штрих-код розпізнано
             Quagga.onDetected(function(result) {
                 const code = result.codeResult.code;
-                console.log("Barcode detected and processed: " + code);
-
+                console.log("Barcode detected and processed", code);
+                statusMessage.textContent = `Знайдено: ${code}`;
+                
                 // Зупиняємо сканування
                 Quagga.stop();
-
-                // Надсилаємо дані в Telegram
+                
+                // Надсилаємо дані та закриваємо
                 if (window.Telegram && window.Telegram.WebApp) {
                     window.Telegram.WebApp.sendData(code);
-                    // Закриваємо вікно після відправки
-                    setTimeout(closeScanner, 100); 
+                    setTimeout(closeScanner, 100);
                 } else {
-                    console.log("Not in Telegram context. Detected code: " + code);
-                    alert("Штрих-код: " + code); // Для тестування поза Telegram
+                    alert(`Штрих-код: ${code}`);
                 }
             });
-        });
-    </script>
+        }
 
+        window.addEventListener('load', startScanner);
+    </script>
 </body>
 </html>
 
