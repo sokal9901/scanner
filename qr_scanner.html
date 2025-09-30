@@ -2,15 +2,14 @@
 <html lang="uk">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Сканер</title>
     <style>
-        /* Новий підхід до висоти екрану */
         body, html {
             margin: 0;
             padding: 0;
-            width: 100vw; /* 100% ширини екрану */
-            height: 100vh; /* 100% висоти екрану */
+            height: 100vh;
+            width: 100vw;
             overflow: hidden;
             background-color: #000;
         }
@@ -45,12 +44,20 @@
                 function onScanSuccess(decodedText) {
                     if (scanSuccessful) return;
                     scanSuccessful = true;
+
                     html5QrCode.stop().catch(err => console.error("Помилка зупинки сканера.", err));
+
                     if (navigator.vibrate) {
                         navigator.vibrate(100);
                     }
+                    
+                    // Спочатку надсилаємо дані
                     window.Telegram.WebApp.sendData(decodedText);
-                    setTimeout(() => window.Telegram.WebApp.close(), 200);
+                    
+                    // !!! КЛЮЧОВЕ ВИПРАВЛЕННЯ: Додаємо затримку перед закриттям !!!
+                    setTimeout(() => {
+                        window.Telegram.WebApp.close();
+                    }, 500); // 500 мілісекунд
                 }
 
                 const html5QrCode = new Html5Qrcode("reader");
@@ -59,14 +66,17 @@
                     qrbox: {
                         width: 280,
                         height: 150 
-                    }
+                    },
+                    supportedScanTypes: [
+                        Html5QrcodeScanType.SCAN_TYPE_CAMERA
+                    ]
                 };
 
                 html5QrCode.start(
                     { facingMode: "environment" },
                     config,
                     onScanSuccess,
-                    (errorMessage) => { /* Ігноруємо помилки */ }
+                    (errorMessage) => { /* Ігноруємо проміжні помилки сканування */ }
                 ).catch(err => {
                     document.body.innerHTML = `<div style="color:white; text-align:center; padding: 20px;">Помилка доступу до камери. Будь ласка, надайте дозвіл.</div>`;
                     console.error("Не вдалося запустити камеру.", err);
