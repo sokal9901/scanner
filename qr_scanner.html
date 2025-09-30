@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Barcode Scanner</title>
+    <!-- Підключення Tailwind CSS для стилізації -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Підключення бібліотеки QuaggaJS для розпізнавання штрих-кодів -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/quagga/0.12.1/quagga.min.js"></script>
+    <!-- Скрипт для інтеграції з Telegram -->
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden; /* Забороняємо скрол */
+        }
+        /* Контейнер сканера займає весь екран */
+        #scanner-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: #000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        /* Відео розтягується на весь екран, зберігаючи пропорції */
+        #interactive video, #interactive canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        /* Лінія сканування */
+        .scanner-line {
+            position: absolute;
+            left: 5%;
+            right: 5%;
+            width: 90%;
+            height: 2px;
+            background: #ef4444;
+            box-shadow: 0 0 10px #ef4444, 0 0 20px #ef4444;
+            animation: scanning 2s infinite ease-in-out;
+            border-radius: 2px;
+        }
+        @keyframes scanning {
+            0% { top: 10%; }
+            50% { top: 90%; }
+            100% { top: 10%; }
+        }
+        /* Стилізація рамки, яку малює QuaggaJS */
+        .drawingBuffer {
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+        .drawingBuffer canvas, .drawingBuffer video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+    </style>
+</head>
+<body class="bg-black">
+
+    <!-- Повноекранний контейнер сканера -->
+    <div id="scanner-container">
+        <!-- Елемент, в який QuaggaJS буде виводити відео -->
+        <div id="interactive" class="viewport"></div>
+        <!-- Анімована лінія сканування -->
+        <div class="scanner-line"></div>
+        <!-- Кнопка для закриття сканера -->
+        <button id="closeButton" class="absolute top-4 right-4 bg-black bg-opacity-50 text-white font-bold text-2xl w-10 h-10 rounded-full z-10 flex items-center justify-center">
+            &times;
+        </button>
+    </div>
+
+    <script>
+        const closeButton = document.getElementById('closeButton');
+        let isScanning = false;
+
+        // Функція для запуску сканування
+        const startScanner = () => {
+            if (isScanning) return;
+
+            Quagga.init({
+                inputStream: {
+                    name: "Live",
+                    type: "LiveStream",
+                    target: document.querySelector('#interactive'),
+                    constraints: {
+                        width: { min: 1280 },
+                        height: { min: 720 },
+                        facingMode: "environment", // Використовувати задню камеру
+                    },
+                },
+                locator: {
+                    patchSize: "medium",
+                    halfSample: true
+                },
+                numOfWorkers: navigator.hardwareConcurrency || 4,
+                decoder: {
+                    // Список штрих-кодів, які потрібно розпізнавати
+                    readers: ["ean_reader", "upc_reader", "code_128_reader", "code_39_reader"]
+                },
+                locate: true
+            }, function(err) {
+                if (err) {
+                    console.error("Помилка ініціалізації Quagga:", err);
+                    // Сповіщаємо користувача, якщо щось пішло не так
+                    if (window.Telegram && window.Telegram.WebApp) {
+                        Telegram.WebApp.showAlert("Не вдалося запустити сканер. Будь ласка, перевірте доступ до камери.");
+                    }
+                    return;
+                }
+                Quagga.start();
+                isScanning = true;
+            });
+
+            // Обробник знайденого коду
+            const handleDetection = (data) => {
+                if (data && data.codeResult && data.codeResult.code) {
+                    // Зупиняємо сканування, щоб уникнути повторних спрацювань
+                    Quagga.offDetected(handleDetection);
+                    Quagga.stop();
+                    isScanning = false;
+
+                    // Перевіряємо, чи запущено додаток у Telegram
+                    if (window.Telegram && window.Telegram.WebApp) {
+                        // Надсилаємо дані боту
+                        Telegram.WebApp.sendData(data.codeResult.code);
+                        // Закриваємо веб-додаток
+                        Telegram.WebApp.close();
+                    } else {
+                        // Для тестування в звичайному браузері
+                        console.log("Scanned code (not in Telegram):", data.codeResult.code);
+                        alert(`Відскановано: ${data.codeResult.code}`);
+                    }
+                }
+            };
+            
+            Quagga.onDetected(handleDetection);
+        };
+
+        // Обробник кнопки закриття
+        closeButton.addEventListener('click', () => {
+             if (window.Telegram && window.Telegram.WebApp) {
+                Telegram.WebApp.close();
+            }
+        });
+
+        // Запускаємо сканер, як тільки сторінка завантажиться
+        window.addEventListener('load', () => {
+            if (window.Telegram && window.Telegram.WebApp) {
+                Telegram.WebApp.ready(); // Повідомляємо Telegram, що додаток готовий
+                Telegram.WebApp.expand(); // Розгортаємо вікно на весь екран
+            }
+            startScanner();
+        });
+    </script>
+</body>
+</html>
+
