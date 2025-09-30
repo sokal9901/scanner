@@ -5,85 +5,77 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>Сканер</title>
     <style>
+        /* Новий підхід до висоти екрану */
         body, html {
             margin: 0;
             padding: 0;
-            height: 100%;
-            width: 100%;
+            width: 100vw; /* 100% ширини екрану */
+            height: 100vh; /* 100% висоти екрану */
             overflow: hidden;
             background-color: #000;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
         }
         #reader {
-            width: 100%;
-            height: 100%;
             position: absolute;
             top: 0;
             left: 0;
+            width: 100%;
+            height: 100%;
         }
-        #status-message {
-            position: absolute;
-            bottom: 30px;
-            background-color: rgba(0,0,0,0.7);
-            padding: 10px 20px;
-            border-radius: 10px;
-            z-index: 10;
+        #reader video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
         }
     </style>
 </head>
 <body>
     <div id="reader"></div>
-    <div id="status-message">Запуск сканера...</div>
 
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 
     <script>
         document.addEventListener('DOMContentLoaded', () => {
-            const statusMessage = document.getElementById('status-message');
-            let scanSuccessful = false;
+            try {
+                let scanSuccessful = false;
 
-            window.Telegram.WebApp.ready();
+                window.Telegram.WebApp.ready();
+                window.Telegram.WebApp.expand();
 
-            function onScanSuccess(decodedText) {
-                if (scanSuccessful) return;
-                scanSuccessful = true;
-
-                html5QrCode.stop().catch(err => console.error("Помилка зупинки сканера.", err));
-
-                if (navigator.vibrate) {
-                    navigator.vibrate(100);
+                function onScanSuccess(decodedText) {
+                    if (scanSuccessful) return;
+                    scanSuccessful = true;
+                    html5QrCode.stop().catch(err => console.error("Помилка зупинки сканера.", err));
+                    if (navigator.vibrate) {
+                        navigator.vibrate(100);
+                    }
+                    window.Telegram.WebApp.sendData(decodedText);
+                    setTimeout(() => window.Telegram.WebApp.close(), 200);
                 }
-                
-                window.Telegram.WebApp.sendData(decodedText);
-                setTimeout(() => window.Telegram.WebApp.close(), 200);
+
+                const html5QrCode = new Html5Qrcode("reader");
+                const config = { 
+                    fps: 10,
+                    qrbox: {
+                        width: 280,
+                        height: 150 
+                    }
+                };
+
+                html5QrCode.start(
+                    { facingMode: "environment" },
+                    config,
+                    onScanSuccess,
+                    (errorMessage) => { /* Ігноруємо помилки */ }
+                ).catch(err => {
+                    document.body.innerHTML = `<div style="color:white; text-align:center; padding: 20px;">Помилка доступу до камери. Будь ласка, надайте дозвіл.</div>`;
+                    console.error("Не вдалося запустити камеру.", err);
+                });
+
+            } catch (e) {
+                document.body.innerHTML = `<div style="color:white; text-align:center; padding: 20px;">Сталася критична помилка: ${e.message}</div>`;
+                console.error("Global script error:", e);
             }
-
-            const html5QrCode = new Html5Qrcode("reader");
-            const config = { 
-                fps: 10,
-                // Використовуємо вбудовану рамку бібліотеки
-                qrbox: {
-                    width: 280,
-                    height: 150 
-                }
-            };
-
-            html5QrCode.start(
-                { facingMode: "environment" },
-                config,
-                onScanSuccess,
-                (errorMessage) => { /* Ігноруємо помилки */ }
-            ).then(() => {
-                statusMessage.textContent = 'Наведіть камеру на штрих-код';
-            }).catch(err => {
-                statusMessage.textContent = 'Помилка доступу до камери';
-                console.error("Не вдалося запустити камеру.", err);
-            });
         });
     </script>
 </body>
