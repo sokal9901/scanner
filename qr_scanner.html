@@ -77,20 +77,17 @@
                     
                     // 2. Показуємо результат на екрані
                     readerDiv.style.display = 'none';
-                    resultText.textContent = `✅ Знайдено:\n${decodedText}`;
+                    resultText.textContent = `✅ Знайдено:\n${decodedText}\n\nПовертайтесь у бот...`;
                     resultContainer.style.display = 'flex';
 
                     if (navigator.vibrate) {
                         navigator.vibrate(100);
                     }
                     
-                    // 3. Надсилаємо дані боту
+                    // 3. Надсилаємо дані боту. Тепер вікно не закривається автоматично.
                     window.Telegram.WebApp.sendData(decodedText);
                     
-                    // 4. Закриваємо вікно через 2 секунди
-                    setTimeout(() => {
-                        window.Telegram.WebApp.close();
-                    }, 2000); // 2 секунди затримки
+                    // РЯДОК З АВТОМАТИЧНИМ ЗАКРИТТЯМ ВИДАЛЕНО
                 }
 
                 const html5QrCode = new Html5Qrcode("reader");
@@ -118,4 +115,13 @@
     </script>
 </body>
 </html>
+```
+
+### Що я змінив у `scanner.html`
+
+Я видалив цей блок коду:
+```javascript
+setTimeout(() => {
+    window.Telegram.WebApp.close();
+}, 2000);
 
