@@ -12,6 +12,11 @@
             width: 100vw;
             overflow: hidden;
             background-color: #000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            color: white;
         }
         #reader {
             position: absolute;
@@ -25,8 +30,9 @@
             height: 100%;
             object-fit: cover;
         }
+        /* Стиль для повідомлення про результат */
         #result-container {
-            display: none;
+            display: none; /* Сховано за замовчуванням */
             position: absolute;
             top: 0;
             left: 0;
@@ -39,18 +45,6 @@
             justify-content: center;
             text-align: center;
             font-size: 1.5em;
-            color: white;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-        }
-        #close-button {
-            margin-top: 20px;
-            padding: 15px 30px;
-            font-size: 1em;
-            color: white;
-            background-color: #007bff;
-            border: none;
-            border-radius: 8px;
-            cursor: pointer;
         }
     </style>
 </head>
@@ -58,71 +52,45 @@
     <div id="reader"></div>
     <div id="result-container">
         <p id="result-text"></p>
-        <button id="close-button">Повернутись у бот</button>
     </div>
+
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+
     <script>
         document.addEventListener('DOMContentLoaded', () => {
             try {
-                // --- ВАЖЛИВО! ВСТАВТЕ ВАШЕ ПОСИЛАННЯ СЮДИ ---
-                const FUNCTION_URL = 'https://europe-west3-termin-pridatnosti.cloudfunctions.net/telegramBotHandler';
-                // ---------------------------------------------
-
                 const readerDiv = document.getElementById('reader');
                 const resultContainer = document.getElementById('result-container');
                 const resultText = document.getElementById('result-text');
-                const closeButton = document.getElementById('close-button');
                 let scanSuccessful = false;
-                
+
                 window.Telegram.WebApp.ready();
                 window.Telegram.WebApp.expand();
-                
-                const tg = window.Telegram.WebApp;
 
-                closeButton.onclick = function() {
-                    tg.close();
-                };
-
-                async function onScanSuccess(decodedText) {
+                function onScanSuccess(decodedText) {
                     if (scanSuccessful) return;
                     scanSuccessful = true;
-                    
-                    try {
-                        await html5QrCode.stop();
-                    } catch (err) {
-                        console.error("Помилка зупинки камери (можна ігнорувати):", err);
-                    }
 
+                    // 1. Зупиняємо камеру
+                    html5QrCode.stop().catch(err => console.error("Помилка зупинки сканера.", err));
+                    
+                    // 2. Показуємо результат на екрані
                     readerDiv.style.display = 'none';
+                    resultText.textContent = `✅ Знайдено:\n${decodedText}`;
                     resultContainer.style.display = 'flex';
-                    resultText.textContent = `✅ Відскановано. Надсилаю...`;
 
                     if (navigator.vibrate) {
                         navigator.vibrate(100);
                     }
-
-                    try {
-                        const response = await fetch(FUNCTION_URL, {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json'
-                            },
-                            body: JSON.stringify({
-                                barcode: decodedText,
-                                initData: tg.initData
-                            })
-                        });
-
-                        if (response.ok) {
-                            resultText.textContent = `✅ Надіслано!`;
-                            setTimeout(() => tg.close(), 1000); // Закриваємо через секунду
-                        } else {
-                            resultText.textContent = `❌ Помилка відправки.`;
-                        }
-                    } catch (error) {
-                        resultText.textContent = `❌ Помилка мережі.`;
-                    }
+                    
+                    // 3. Надсилаємо дані боту
+                    window.Telegram.WebApp.sendData(decodedText);
+                    
+                    // 4. Закриваємо вікно через 2 секунди
+                    setTimeout(() => {
+                        window.Telegram.WebApp.close();
+                    }, 2000); // 2 секунди затримки
                 }
 
                 const html5QrCode = new Html5Qrcode("reader");
@@ -136,17 +104,18 @@
                     { facingMode: "environment" },
                     config,
                     onScanSuccess,
-                    (errorMessage) => { /* Ігноруємо помилки */ }
+                    (errorMessage) => { /* Ігноруємо проміжні помилки сканування */ }
                 ).catch(err => {
-                    readerDiv.style.display = 'none';
-                    resultContainer.style.display = 'flex';
-                    resultText.textContent = `Помилка доступу до камери. Надайте дозвіл.`;
+                    document.body.innerHTML = `<div style="color:white; text-align:center; padding: 20px;">Помилка доступу до камери. Будь ласка, надайте дозвіл.</div>`;
+                    console.error("Не вдалося запустити камеру.", err);
                 });
 
             } catch (e) {
-                document.body.innerHTML = `<div style="color:white; text-align:center; padding: 20px;">Сталася критична помилка.</div>`;
+                document.body.innerHTML = `<div style="color:white; text-align:center; padding: 20px;">Сталася критична помилка: ${e.message}</div>`;
+                console.error("Global script error:", e);
             }
         });
     </script>
 </body>
 </html>
+
