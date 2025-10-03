@@ -30,9 +30,8 @@
             height: 100%;
             object-fit: cover;
         }
-        /* Стиль для повідомлення про результат */
         #result-container {
-            display: none; /* Сховано за замовчуванням */
+            display: none;
             position: absolute;
             top: 0;
             left: 0;
@@ -46,12 +45,23 @@
             text-align: center;
             font-size: 1.5em;
         }
+        #send-button {
+            margin-top: 20px;
+            padding: 15px 30px;
+            font-size: 1em;
+            color: white;
+            background-color: #007bff;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+        }
     </style>
 </head>
 <body>
     <div id="reader"></div>
     <div id="result-container">
         <p id="result-text"></p>
+        <button id="send-button" style="display: none;">Надіслати</button>
     </div>
 
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
@@ -63,6 +73,7 @@
                 const readerDiv = document.getElementById('reader');
                 const resultContainer = document.getElementById('result-container');
                 const resultText = document.getElementById('result-text');
+                const sendButton = document.getElementById('send-button');
                 let scanSuccessful = false;
 
                 window.Telegram.WebApp.ready();
@@ -72,18 +83,20 @@
                     if (scanSuccessful) return;
                     scanSuccessful = true;
 
-                    // Показуємо миттєвий результат
+                    html5QrCode.stop().catch(err => console.error("Помилка зупинки сканера.", err));
+
                     readerDiv.style.display = 'none';
-                    resultText.textContent = `✅ Відскановано. Надсилаю...`;
+                    resultText.textContent = `✅ Відскановано:\n${decodedText}`;
+                    sendButton.style.display = 'block';
                     resultContainer.style.display = 'flex';
 
                     if (navigator.vibrate) {
                         navigator.vibrate(100);
                     }
                     
-                    // Негайно надсилаємо дані, не зупиняючи камеру.
-                    // Ця функція має сама надіслати дані та закрити вікно.
-                    window.Telegram.WebApp.sendData(decodedText);
+                    sendButton.onclick = function() {
+                        window.Telegram.WebApp.sendData(decodedText);
+                    };
                 }
 
                 const html5QrCode = new Html5Qrcode("reader");
