@@ -30,11 +30,26 @@
             height: 100%;
             object-fit: cover;
         }
+        #status-message {
+            display: none;
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.7);
+            z-index: 100;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            font-size: 1.2em;
+        }
     </style>
 </head>
 <body>
     <div id="reader"></div>
-    <!-- Result container is removed for instant feedback in bot -->
+    <div id="status-message"></div>
 
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
@@ -44,6 +59,8 @@
             try {
                 let scanSuccessful = false;
                 const html5QrCode = new Html5Qrcode("reader");
+                const readerDiv = document.getElementById('reader');
+                const statusMessageDiv = document.getElementById('status-message');
 
                 window.Telegram.WebApp.ready();
                 window.Telegram.WebApp.expand();
@@ -59,14 +76,18 @@
                         navigator.vibrate(100);
                     }
                     
+                    // Show a message to the user confirming the action
+                    readerDiv.style.display = 'none';
+                    statusMessageDiv.style.display = 'flex';
+                    statusMessageDiv.innerText = `Надсилаю код: ${decodedText}\nПовертайтесь у бот...`;
+
                     // Send data to the bot
                     window.Telegram.WebApp.sendData(decodedText);
                     
-                    // Close the Web App immediately after sending data
-                    // A small delay can help ensure the sendData call is dispatched
+                    // Close the Web App after a short delay so the user can see the message
                     setTimeout(() => {
                         window.Telegram.WebApp.close();
-                    }, 200);
+                    }, 1500);
                 }
                 
                 const formatsToSupport = [
