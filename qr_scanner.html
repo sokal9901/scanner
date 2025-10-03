@@ -72,21 +72,26 @@
                     if (scanSuccessful) return;
                     scanSuccessful = true;
 
-                    // 1. Зупиняємо камеру
-                    html5QrCode.stop().catch(err => console.error("Помилка зупинки сканера.", err));
-                    
-                    // 2. Показуємо результат на екрані
-                    readerDiv.style.display = 'none';
-                    resultText.textContent = `✅ Знайдено:\n${decodedText}\n\nПовертайтесь у бот...`;
-                    resultContainer.style.display = 'flex';
+                    // 1. Зупиняємо камеру і ЧЕКАЄМО, поки вона зупиниться
+                    html5QrCode.stop().then(() => {
+                        // 2. Показуємо результат на екрані
+                        readerDiv.style.display = 'none';
+                        resultText.textContent = `✅ Знайдено:\n${decodedText}`;
+                        resultContainer.style.display = 'flex';
 
-                    if (navigator.vibrate) {
-                        navigator.vibrate(100);
-                    }
-                    
-                    // 3. Надсилаємо дані боту. Тепер вікно не закривається автоматично.
-                    window.Telegram.WebApp.sendData(decodedText);
-                    
+                        if (navigator.vibrate) {
+                            navigator.vibrate(100);
+                        }
+                        
+                        // 3. ТІЛЬКИ ПІСЛЯ зупинки камери надсилаємо дані.
+                        // Ця функція сама закриє вікно.
+                        window.Telegram.WebApp.sendData(decodedText);
+
+                    }).catch(err => {
+                        console.error("Помилка зупинки сканера.", err);
+                        // Навіть якщо зупинка камери дала помилку, все одно спробуємо надіслати дані
+                        window.Telegram.WebApp.sendData(decodedText);
+                    });
                 }
 
                 const html5QrCode = new Html5Qrcode("reader");
