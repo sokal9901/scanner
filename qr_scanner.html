@@ -72,26 +72,18 @@
                     if (scanSuccessful) return;
                     scanSuccessful = true;
 
-                    // 1. Зупиняємо камеру і ЧЕКАЄМО, поки вона зупиниться
-                    html5QrCode.stop().then(() => {
-                        // 2. Показуємо результат на екрані для користувача
-                        readerDiv.style.display = 'none';
-                        resultText.textContent = `✅ Знайдено:\n${decodedText}`;
-                        resultContainer.style.display = 'flex';
+                    // Показуємо миттєвий результат
+                    readerDiv.style.display = 'none';
+                    resultText.textContent = `✅ Відскановано. Надсилаю...`;
+                    resultContainer.style.display = 'flex';
 
-                        if (navigator.vibrate) {
-                            navigator.vibrate(100);
-                        }
-                        
-                        // 3. ТІЛЬКИ ПІСЛЯ зупинки камери надсилаємо дані.
-                        // Ця функція сама надійно відправить дані та закриє вікно.
-                        window.Telegram.WebApp.sendData(decodedText);
-
-                    }).catch(err => {
-                        console.error("Помилка зупинки сканера.", err);
-                        // Навіть якщо зупинка камери дала помилку, все одно намагаємося надіслати дані
-                        window.Telegram.WebApp.sendData(decodedText);
-                    });
+                    if (navigator.vibrate) {
+                        navigator.vibrate(100);
+                    }
+                    
+                    // Негайно надсилаємо дані, не зупиняючи камеру.
+                    // Ця функція має сама надіслати дані та закрити вікно.
+                    window.Telegram.WebApp.sendData(decodedText);
                 }
 
                 const html5QrCode = new Html5Qrcode("reader");
