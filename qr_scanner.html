@@ -3,97 +3,66 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Діагностика Сканера</title>
+    <title>Сканер</title>
     <style>
         body, html {
             margin: 0;
-            padding: 10px;
+            padding: 0;
             height: 100vh;
             width: 100vw;
-            overflow: auto;
+            overflow: hidden;
             background-color: #000;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            color: white;
-            box-sizing: border-box;
         }
-        p {
-            margin: 5px 0;
-            word-wrap: break-word;
+        #reader {
+            width: 100%;
+            height: 100%;
         }
-        .ok { color: #28a745; }
-        .error { color: #dc3545; }
-        .info { color: #17a2b8; }
-        button {
-            margin-top: 20px;
-            padding: 15px 30px;
-            font-size: 1em;
-            color: white;
-            background-color: #007bff;
-            border: none;
-            border-radius: 8px;
-            cursor: pointer;
+        #reader video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
         }
     </style>
 </head>
 <body>
-    <h3>Діагностика середовища Telegram</h3>
-    <div id="diagnostics"></div>
-    <button id="test-send">Надіслати тестові дані</button>
+    <div id="reader"></div>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
     <script>
         document.addEventListener('DOMContentLoaded', () => {
-            const diagnosticsDiv = document.getElementById('diagnostics');
-            const testSendButton = document.getElementById('test-send');
-            const startTime = new Date();
+            try {
+                let scanSuccessful = false;
+                window.Telegram.WebApp.ready();
+                window.Telegram.WebApp.expand();
 
-            function log(message, className = 'info') {
-                const p = document.createElement('p');
-                p.className = className;
-                p.textContent = `[${((new Date() - startTime) / 1000).toFixed(2)}s] ${message}`;
-                diagnosticsDiv.appendChild(p);
-            }
-
-            log('Сторінка завантажена.');
-
-            if (window.Telegram && window.Telegram.WebApp) {
-                log('Об\'єкт window.Telegram.WebApp знайдено.', 'ok');
-                
-                try {
-                    log('Викликаю Telegram.WebApp.ready()...');
-                    window.Telegram.WebApp.ready();
-                    log('Telegram.WebApp.ready() виконано без помилок.', 'ok');
-
-                    log('Викликаю Telegram.WebApp.expand()...');
-                    window.Telegram.WebApp.expand();
-                    log('Telegram.WebApp.expand() виконано без помилок.', 'ok');
+                function onScanSuccess(decodedText) {
+                    if (scanSuccessful) return;
+                    scanSuccessful = true;
                     
-                    log(`Версія Web App: ${window.Telegram.WebApp.version}`);
-                    log(`Платформа: ${window.Telegram.WebApp.platform}`);
-                    log(`Тема: ${window.Telegram.WebApp.colorScheme}`);
-                    log(`Ініціалізаційні дані (наявність): ${window.Telegram.WebApp.initData ? 'Так' : 'Ні, це проблема!'}`);
-
-                } catch (e) {
-                    log(`Критична помилка при ініціалізації: ${e.message}`, 'error');
+                    // Негайно надсилаємо дані без будь-яких інших дій.
+                    // Ця функція сама закриє вікно.
+                    window.Telegram.WebApp.sendData(decodedText);
                 }
 
-            } else {
-                log('Об\'єкт window.Telegram.WebApp НЕ знайдено! Скрипт не завантажився або заблокований.', 'error');
+                const html5QrCode = new Html5Qrcode("reader");
+                const config = { 
+                    fps: 10,
+                    qrbox: { width: 280, height: 150 },
+                    supportedScanTypes: [Html5QrcodeScanType.SCAN_TYPE_CAMERA]
+                };
+
+                html5QrCode.start(
+                    { facingMode: "environment" },
+                    config,
+                    onScanSuccess,
+                    (errorMessage) => { /* Ігноруємо помилки */ }
+                ).catch(err => {
+                    document.body.innerHTML = `<div style="color:white; text-align:center; padding: 20px;">Помилка доступу до камери.</div>`;
+                });
+
+            } catch (e) {
+                document.body.innerHTML = `<div style="color:white; text-align:center; padding: 20px;">Сталася критична помилка.</div>`;
             }
-
-            testSendButton.onclick = function() {
-                const testData = `Тестові дані від ${new Date().toISOString()}`;
-                log(`Натиснуто кнопку. Спроба надіслати: "${testData}"`);
-                try {
-                    if (window.Telegram && window.Telegram.WebApp) {
-                        window.Telegram.WebApp.sendData(testData);
-                        log('Команду sendData() викликано. Якщо вікно не закрилось, значить, Telegram її проігнорував.', 'ok');
-                    } else {
-                        log('Неможливо надіслати, об\'єкт WebApp відсутній.', 'error');
-                    }
-                } catch (e) {
-                    log(`Помилка під час виклику sendData: ${e.message}`, 'error');
-                }
-            };
         });
     </script>
 </body>
