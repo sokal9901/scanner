@@ -73,7 +73,9 @@
                     scanSuccessful = true;
                     
                     try {
-                        await html5QrCode.stop();
+                        if (html5QrCode.isScanning) {
+                            await html5QrCode.stop();
+                        }
                     } catch (err) {
                         console.error("Error stopping the camera:", err);
                     }
@@ -105,11 +107,10 @@
                 };
                 
                 const onScanFailure = (error) => {
-                    // This function is called when a QR code is not found in a frame.
-                    // We can ignore it, but the verbose: true setting will log details to the console.
+                    // Ця функція викликається, коли штрих-код не знайдено. Ми можемо її ігнорувати.
                 };
 
-                const html5QrCode = new Html5Qrcode("reader", { verbose: true });
+                const html5QrCode = new Html5Qrcode("reader");
                 
                 const startScanner = () => {
                     messageContainer.style.display = 'none';
@@ -117,21 +118,11 @@
 
                     const config = { 
                         fps: 10, 
-                        qrbox: { width: 300, height: 160 },
-                        // This will be ignored by the library if not supported, but can help
-                        experimentalFeatures: {
-                            useBarCodeDetectorIfSupported: true
-                        }
+                        qrbox: { width: 280, height: 150 }
                     };
                     
-                    const cameraConfig = { 
-                        facingMode: { exact: "environment" },
-                        advanced: [{
-                            focusMode: "continuous"
-                        }]
-                    };
-
-                    html5QrCode.start(cameraConfig, config, onScanSuccess, onScanFailure)
+                    // Використовуємо простіший і більш сумісний запит до камери
+                    html5QrCode.start({ facingMode: "environment" }, config, onScanSuccess, onScanFailure)
                         .catch(err => {
                             console.error("Camera start error:", err);
                             readerDiv.style.display = 'none';
