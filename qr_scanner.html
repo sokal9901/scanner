@@ -8,87 +8,35 @@
         body, html {
             margin: 0; padding: 0; height: 100vh; width: 100vw;
             overflow: hidden; background-color: #000;
-            display: flex; justify-content: center; align-items: center;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
         }
-        #reader {
+        #video-container {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            display: none;
-            overflow: hidden;
+            display: none; /* Hidden until camera starts */
         }
-        #reader video {
+        #video-element {
             width: 100%; height: 100%; object-fit: cover;
         }
-        .container {
-            display: flex; flex-direction: column; align-items: center; justify-content: center;
-            text-align: center; color: white;
-            padding: 20px;
-        }
-        #start-button {
-            padding: 15px 30px; font-size: 1.2em;
-            color: white; background-color: #007bff; border: none;
-            border-radius: 12px; cursor: pointer;
-            margin-bottom: 20px;
-        }
-        #status-text {
-            font-size: 1.1em;
+        #message-container {
+            display: flex; /* Shown by default for loading/error messages */
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background-color: #1c1c1e; z-index: 100;
+            flex-direction: column; align-items: center; justify-content: center;
+            text-align: center; font-size: 1.5em; color: white;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
         }
         #close-button {
-            margin-top: 20px; padding: 15px 30px; font-size: 1em;
+            margin-top: 20px; padding: 15px 30px; font-size: 1.1em;
             color: white; background-color: #007bff; border: none;
-            border-radius: 8px; cursor: pointer;
-        }
-        #qr-scanner-overlay {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            width: 80vw;
-            max-width: 400px;
-            height: 40vw;
-            max-height: 200px;
-            border: 2px solid rgba(255, 255, 255, 0.7);
-            box-shadow: 0 0 0 4000px rgba(0, 0, 0, 0.5);
-            border-radius: 8px;
-        }
-        .scanner-line {
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            height: 2px;
-            background: #ff3b30;
-            box-shadow: 0 0 10px #ff3b30;
-            animation: scan 2.5s infinite linear;
-        }
-        @keyframes scan {
-            0% { top: 0; }
-            50% { top: calc(100% - 2px); }
-            100% { top: 0; }
-        }
-        #qr-scanner-hint {
-            position: absolute;
-            bottom: 30px;
-            left: 50%;
-            transform: translateX(-50%);
-            color: white;
-            background-color: rgba(0,0,0,0.6);
-            padding: 8px 15px;
-            border-radius: 8px;
-            font-size: 0.9em;
+            border-radius: 12px; cursor: pointer;
         }
     </style>
 </head>
 <body>
-    <div id="reader">
+    <div id="video-container">
         <video id="video-element" playsinline></video>
-        <div id="qr-scanner-overlay" style="display: none;">
-            <div class="scanner-line"></div>
-        </div>
-        <div id="qr-scanner-hint" style="display: none;">Розмістіть штрих-код у рамці</div>
     </div>
-    <div id="message-container" class="container">
-        <button id="start-button">Активувати камеру</button>
+
+    <div id="message-container">
         <p id="status-text"></p>
         <button id="close-button" style="display: none;">Повернутись у бот</button>
     </div>
@@ -100,21 +48,19 @@
             try {
                 const FUNCTION_URL = 'https://europe-west3-termin-pridatnosti.cloudfunctions.net/telegramBotHandler';
 
-                const readerDiv = document.getElementById('reader');
+                const videoContainer = document.getElementById('video-container');
                 const videoElement = document.getElementById('video-element');
-                const scannerOverlay = document.getElementById('qr-scanner-overlay');
-                const scannerHint = document.getElementById('qr-scanner-hint');
                 const messageContainer = document.getElementById('message-container');
-                const startButton = document.getElementById('start-button');
                 const statusText = document.getElementById('status-text');
                 const closeButton = document.getElementById('close-button');
+                
                 let scanSuccessful = false;
-                
-                window.Telegram.WebApp.ready();
-                window.Telegram.WebApp.expand();
-                
                 const tg = window.Telegram.WebApp;
+                
                 const codeReader = new ZXingBrowser.BrowserMultiFormatReader();
+
+                tg.ready();
+                tg.expand();
 
                 closeButton.onclick = () => {
                     codeReader.reset();
@@ -126,15 +72,11 @@
                     scanSuccessful = true;
                     
                     codeReader.reset();
+                    videoContainer.style.display = 'none';
 
-                    readerDiv.style.display = 'none';
-                    scannerOverlay.style.display = 'none';
-                    scannerHint.style.display = 'none';
                     messageContainer.style.display = 'flex';
-                    startButton.style.display = 'none';
                     statusText.textContent = `✅ Відскановано. Надсилаю...`;
                     closeButton.style.display = 'block';
-
                     if (navigator.vibrate) navigator.vibrate(100);
 
                     try {
@@ -147,51 +89,45 @@
                             statusText.textContent = `✅ Надіслано!`;
                             setTimeout(() => tg.close(), 1000);
                         } else {
-                            const errorData = await response.json();
-                            statusText.textContent = `❌ Помилка відправки: ${errorData.error || 'Невідома помилка'}`;
+                            statusText.textContent = `❌ Помилка відправки.`;
                         }
                     } catch (error) {
                         statusText.textContent = `❌ Помилка мережі. Перевірте інтернет.`;
                     }
                 };
-                
-                const startScanner = async () => {
-                    messageContainer.style.display = 'none';
-                    readerDiv.style.display = 'block';
-                    scannerOverlay.style.display = 'block';
-                    scannerHint.style.display = 'block';
 
+                const startScanner = async () => {
+                    statusText.textContent = 'Запит доступу до камери...';
+                    
                     try {
-                        // Use a more universal method to request the back camera
-                        const constraints = {
-                            video: {
-                                facingMode: 'environment'
-                            }
-                        };
+                        const constraints = { video: { facingMode: 'environment' } };
                         
-                        codeReader.decodeFromConstraints(constraints, 'video-element', (result, err) => {
+                        // This starts the stream and asks for permission
+                        await codeReader.decodeFromConstraints(constraints, 'video-element', (result, err) => {
                             if (result) {
                                 onScanSuccess(result.getText());
                             }
-                            if (err && !(err instanceof ZXingBrowser.NotFoundException)) {
-                                console.error(err);
-                                statusText.textContent = `Помилка сканування: ${err}`;
+                            // Check error by name instead of instanceof to avoid type errors
+                            if (err && err.name !== 'NotFoundException') {
+                                console.error('Scan Error:', err);
                             }
                         });
+                        
+                        // If the above line doesn't throw an error, the camera is active.
+                        messageContainer.style.display = 'none';
+                        videoContainer.style.display = 'block';
 
                     } catch (err) {
                         console.error("Camera start error:", err);
-                        readerDiv.style.display = 'none';
-                        scannerOverlay.style.display = 'none';
-                        scannerHint.style.display = 'none';
+                        videoContainer.style.display = 'none';
                         messageContainer.style.display = 'flex';
-                        startButton.style.display = 'none';
-                        statusText.textContent = `❌ Помилка доступу до камери. Надайте дозвіл та оновіть сторінку. Помилка: ${err}`;
+                        statusText.textContent = `❌ Помилка доступу до камери. Надайте дозвіл у налаштуваннях браузера та оновіть сторінку.`;
                         closeButton.style.display = 'block';
                     }
                 };
                 
-                startButton.onclick = startScanner;
+                // Start the scanner automatically on page load
+                startScanner();
 
             } catch (e) {
                 document.body.innerHTML = `<div style="color:white;text-align:center;padding:20px;">Критична помилка: ${e.message}</div>`;
