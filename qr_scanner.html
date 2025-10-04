@@ -55,84 +55,62 @@
     <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 
     <script>
-        document.addEventListener('DOMContentLoaded', () => {
-            try {
-                let scanSuccessful = false;
-                const html5QrCode = new Html5Qrcode("reader");
-                const readerDiv = document.getElementById('reader');
-                const statusMessageDiv = document.getElementById('status-message');
+// Ця константа має бути у вас на початку файлу
+const TOKEN = "8107050175:AAHH119FxsGQkeGDmIfN0n0X-P3jb34OBbM";
+const API_URL = "https://api.telegram.org/bot" + TOKEN;
 
-                window.Telegram.WebApp.ready();
-                window.Telegram.WebApp.expand();
+// Основна функція, яка обробляє всі запити до бота
+function doPost(e) {
+  try {
+    const contents = JSON.parse(e.postData.contents);
 
-                function onScanSuccess(decodedText, decodedResult) {
-                    if (scanSuccessful) return;
-                    scanSuccessful = true;
+    // ПЕРЕВІРКА: Чи прийшли дані від сканера (Web App)?
+    if (contents.message && contents.message.web_app_data) {
+      
+      const chatId = contents.message.chat.id; // ID чату користувача
+      const scannedText = contents.message.web_app_data.data; // Просканований код
 
-                    // Stop the scanner first
-                    html5QrCode.stop().catch(err => console.error("Помилка зупинки сканера.", err));
+      // Формуємо і відправляємо повідомлення користувачеві
+      const messageToSend = "✅ Сканер отримав код: \n`" + scannedText + "`";
+      sendMessage(chatId, messageToSend, "MarkdownV2");
 
-                    if (navigator.vibrate) {
-                        navigator.vibrate(100);
-                    }
-                    
-                    // Show a message to the user confirming the action
-                    readerDiv.style.display = 'none';
-                    statusMessageDiv.style.display = 'flex';
-                    statusMessageDiv.innerText = `Надсилаю код: ${decodedText}\nПовертайтесь у бот...`;
+    } 
+    // Тут можуть бути ваші інші обробники (наприклад, для текстових команд)
+    else if (contents.message && contents.message.text) {
+      const chatId = contents.message.chat.id;
+      const text = contents.message.text;
+      
+      // Ваша логіка для команд /start, /menu і т.д.
+      if (text === "/start") {
+        sendMessage(chatId, "Привіт! Це ваш бот.");
+      }
+    }
 
-                    // Send data to the bot
-                    window.Telegram.WebApp.sendData(decodedText);
-                    
-                    // Close the Web App after a short delay so the user can see the message
-                    setTimeout(() => {
-                        window.Telegram.WebApp.close();
-                    }, 1500);
-                }
-                
-                const formatsToSupport = [
-                    Html5QrcodeSupportedFormats.EAN_13,
-                    Html5QrcodeSupportedFormats.CODE_128,
-                    Html5QrcodeSupportedFormats.EAN_8,
-                    Html5QrcodeSupportedFormats.UPC_A,
-                    Html5QrcodeSupportedFormats.UPC_E,
-                    Html5QrcodeSupportedFormats.CODE_39,
-                    Html5QrcodeSupportedFormats.ITF,
-                    Html5QrcodeSupportedFormats.QR_CODE
-                ];
+  } catch (err) {
+    // Записуємо помилку для аналізу
+    Logger.log(err.toString());
+  }
+}
 
-                const config = { 
-                    fps: 10,
-                    qrbox: (viewfinderWidth, viewfinderHeight) => {
-                        let width = Math.floor(viewfinderWidth * 0.85);
-                        if (width > 300) width = 300;
-                        return {
-                            width: width,
-                            height: Math.floor(width * 0.7)
-                        };
-                    },
-                    formatsToSupport: formatsToSupport,
-                    experimentalFeatures: {
-                        useBarCodeDetectorIfSupported: true
-                    }
-                };
+// Універсальна функція для відправки повідомлень
+function sendMessage(chatId, text, parseMode) {
+  const payload = {
+    'method': 'sendMessage',
+    'chat_id': String(chatId),
+    'text': text,
+    'parse_mode': parseMode || '' // MarkdownV2, HTML або пустий
+  };
 
-                html5QrCode.start(
-                    { facingMode: "environment" },
-                    config,
-                    onScanSuccess,
-                    (errorMessage) => { /* Ignore scanning errors */ }
-                ).catch(err => {
-                    document.body.innerHTML = `<div style="color:white; text-align:center; padding: 20px;">Помилка доступу до камери. Будь ласка, надайте дозвіл.</div>`;
-                    console.error("Не вдалося запустити камеру.", err);
-                });
+  const options = {
+    'method': 'post',
+    'contentType': 'application/json',
+    'payload': JSON.stringify(payload)
+  };
 
-            } catch (e) {
-                document.body.innerHTML = `<div style="color:white; text-align:center; padding: 20px;">Сталася критична помилка: ${e.message}</div>`;
-                console.error("Global script error:", e);
-            }
-        });
+  UrlFetchApp.fetch(API_URL + '/', options);
+}
     </script>
 </body>
 </html>
+
 
