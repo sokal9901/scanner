@@ -14,6 +14,7 @@
         #reader {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
             display: none; /* Hidden by default */
+            overflow: hidden; /* To contain the overlay */
         }
         #reader video {
             width: 100%; height: 100%; object-fit: cover;
@@ -37,10 +38,42 @@
             color: white; background-color: #007bff; border: none;
             border-radius: 8px; cursor: pointer;
         }
+        /* --- NEW SCANNER OVERLAY STYLES --- */
+        #qr-scanner-overlay {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 280px; /* Should match qrbox width */
+            height: 150px; /* Should match qrbox height */
+            border: 2px solid rgba(255, 255, 255, 0.7);
+            box-shadow: 0 0 0 4000px rgba(0, 0, 0, 0.5);
+            border-radius: 8px;
+        }
+        .scanner-line {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: #ff3b30;
+            box-shadow: 0 0 10px #ff3b30;
+            animation: scan 2.5s infinite linear;
+        }
+        @keyframes scan {
+            0% { top: 0; }
+            50% { top: calc(100% - 2px); }
+            100% { top: 0; }
+        }
     </style>
 </head>
 <body>
-    <div id="reader"></div>
+    <div id="reader">
+        <!-- The overlay will be visible when the reader is shown -->
+        <div id="qr-scanner-overlay" style="display: none;">
+            <div class="scanner-line"></div>
+        </div>
+    </div>
     <div id="message-container" class="container">
         <button id="start-button">Активувати камеру</button>
         <p id="status-text"></p>
@@ -55,6 +88,7 @@
                 const FUNCTION_URL = 'https://europe-west3-termin-pridatnosti.cloudfunctions.net/telegramBotHandler';
 
                 const readerDiv = document.getElementById('reader');
+                const scannerOverlay = document.getElementById('qr-scanner-overlay');
                 const messageContainer = document.getElementById('message-container');
                 const startButton = document.getElementById('start-button');
                 const statusText = document.getElementById('status-text');
@@ -81,6 +115,7 @@
                     }
 
                     readerDiv.style.display = 'none';
+                    scannerOverlay.style.display = 'none';
                     messageContainer.style.display = 'flex';
                     startButton.style.display = 'none';
                     statusText.textContent = `✅ Відскановано. Надсилаю...`;
@@ -107,7 +142,7 @@
                 };
                 
                 const onScanFailure = (error) => {
-                    // Ця функція викликається, коли штрих-код не знайдено. Ми можемо її ігнорувати.
+                    // This function is called when a barcode is not found. We can ignore it.
                 };
 
                 const html5QrCode = new Html5Qrcode("reader");
@@ -115,17 +150,34 @@
                 const startScanner = () => {
                     messageContainer.style.display = 'none';
                     readerDiv.style.display = 'block';
+                    scannerOverlay.style.display = 'block';
+
+                    // --- NEW: iOS FIX ---
+                    // This observer ensures the 'playsinline' attribute is set on the video element,
+                    // which is crucial for correct video handling in iOS WebViews.
+                    const observer = new MutationObserver((mutationsList, observer) => {
+                        for(const mutation of mutationsList) {
+                            if (mutation.type === 'childList') {
+                                const videoElement = readerDiv.querySelector('video');
+                                if (videoElement) {
+                                    videoElement.setAttribute('playsinline', '');
+                                    observer.disconnect(); // We only need to do this once
+                                }
+                            }
+                        }
+                    });
+                    observer.observe(readerDiv, { childList: true });
 
                     const config = { 
                         fps: 10, 
                         qrbox: { width: 280, height: 150 }
                     };
                     
-                    // Використовуємо простіший і більш сумісний запит до камери
                     html5QrCode.start({ facingMode: "environment" }, config, onScanSuccess, onScanFailure)
                         .catch(err => {
                             console.error("Camera start error:", err);
                             readerDiv.style.display = 'none';
+                            scannerOverlay.style.display = 'none';
                             messageContainer.style.display = 'flex';
                             startButton.style.display = 'none';
                             statusText.textContent = `❌ Помилка доступу до камери. Надайте дозвіл та оновіть сторінку. Помилка: ${err}`;
