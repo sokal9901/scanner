@@ -8,15 +8,29 @@
         body, html {
             margin: 0; padding: 0; height: 100vh; width: 100vw;
             overflow: hidden; background-color: #000;
-        }
-        #reader { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
-        #reader video { width: 100%; height: 100%; object-fit: cover; }
-        #result-container {
-            display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            background-color: #1c1c1e; z-index: 100;
-            flex-direction: column; align-items: center; justify-content: center;
-            text-align: center; font-size: 1.5em; color: white;
+            display: flex; justify-content: center; align-items: center;
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        }
+        #reader {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            display: none; /* Hidden by default */
+        }
+        #reader video {
+            width: 100%; height: 100%; object-fit: cover;
+        }
+        .container {
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            text-align: center; color: white;
+            padding: 20px;
+        }
+        #start-button {
+            padding: 15px 30px; font-size: 1.2em;
+            color: white; background-color: #007bff; border: none;
+            border-radius: 12px; cursor: pointer;
+            margin-bottom: 20px;
+        }
+        #status-text {
+            font-size: 1.1em;
         }
         #close-button {
             margin-top: 20px; padding: 15px 30px; font-size: 1em;
@@ -27,22 +41,23 @@
 </head>
 <body>
     <div id="reader"></div>
-    <div id="result-container">
-        <p id="result-text"></p>
-        <button id="close-button">Повернутись у бот</button>
+    <div id="message-container" class="container">
+        <button id="start-button">Активувати камеру</button>
+        <p id="status-text"></p>
+        <button id="close-button" style="display: none;">Повернутись у бот</button>
     </div>
+
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
     <script>
         document.addEventListener('DOMContentLoaded', () => {
             try {
-                // --- ВАЖЛИВО! URL вашої Google Cloud Function ---
                 const FUNCTION_URL = 'https://europe-west3-termin-pridatnosti.cloudfunctions.net/telegramBotHandler';
-                // ---------------------------------------------
 
                 const readerDiv = document.getElementById('reader');
-                const resultContainer = document.getElementById('result-container');
-                const resultText = document.getElementById('result-text');
+                const messageContainer = document.getElementById('message-container');
+                const startButton = document.getElementById('start-button');
+                const statusText = document.getElementById('status-text');
                 const closeButton = document.getElementById('close-button');
                 let scanSuccessful = false;
                 
@@ -51,19 +66,24 @@
                 
                 const tg = window.Telegram.WebApp;
 
-                closeButton.onclick = function() { tg.close(); };
+                closeButton.onclick = () => tg.close();
 
-                async function onScanSuccess(decodedText) {
+                const onScanSuccess = async (decodedText) => {
                     if (scanSuccessful) return;
                     scanSuccessful = true;
                     
                     try {
                         await html5QrCode.stop();
-                    } catch (err) { console.error("Помилка зупинки камери:", err); }
+                    } catch (err) {
+                        console.error("Error stopping the camera:", err);
+                    }
 
                     readerDiv.style.display = 'none';
-                    resultContainer.style.display = 'flex';
-                    resultText.textContent = `✅ Відскановано. Надсилаю...`;
+                    messageContainer.style.display = 'flex';
+                    startButton.style.display = 'none';
+                    statusText.textContent = `✅ Відскановано. Надсилаю...`;
+                    closeButton.style.display = 'block';
+
                     if (navigator.vibrate) navigator.vibrate(100);
 
                     try {
@@ -73,29 +93,62 @@
                             body: JSON.stringify({ barcode: decodedText, initData: tg.initData })
                         });
                         if (response.ok) {
-                            resultText.textContent = `✅ Надіслано!`;
+                            statusText.textContent = `✅ Надіслано!`;
                             setTimeout(() => tg.close(), 1000);
                         } else {
-                            resultText.textContent = `❌ Помилка відправки.`;
+                            const errorData = await response.json();
+                            statusText.textContent = `❌ Помилка відправки: ${errorData.error || 'Невідома помилка'}`;
                         }
                     } catch (error) {
-                        resultText.textContent = `❌ Помилка мережі. Перевірте інтернет.`;
+                        statusText.textContent = `❌ Помилка мережі. Перевірте інтернет.`;
                     }
-                }
+                };
+                
+                const onScanFailure = (error) => {
+                    // This function is called when a QR code is not found in a frame.
+                    // We can ignore it, but the verbose: true setting will log details to the console.
+                };
 
-                const html5QrCode = new Html5Qrcode("reader");
-                const config = { fps: 10, qrbox: { width: 280, height: 150 } };
+                const html5QrCode = new Html5Qrcode("reader", { verbose: true });
+                
+                const startScanner = () => {
+                    messageContainer.style.display = 'none';
+                    readerDiv.style.display = 'block';
 
-                html5QrCode.start({ facingMode: "environment" }, config, onScanSuccess)
-                    .catch(err => {
-                        resultContainer.style.display = 'flex';
-                        resultText.textContent = `Помилка доступу до камери. Надайте дозвіл.`;
-                    });
+                    const config = { 
+                        fps: 10, 
+                        qrbox: { width: 300, height: 160 },
+                        // This will be ignored by the library if not supported, but can help
+                        experimentalFeatures: {
+                            useBarCodeDetectorIfSupported: true
+                        }
+                    };
+                    
+                    const cameraConfig = { 
+                        facingMode: { exact: "environment" },
+                        advanced: [{
+                            focusMode: "continuous"
+                        }]
+                    };
+
+                    html5QrCode.start(cameraConfig, config, onScanSuccess, onScanFailure)
+                        .catch(err => {
+                            console.error("Camera start error:", err);
+                            readerDiv.style.display = 'none';
+                            messageContainer.style.display = 'flex';
+                            startButton.style.display = 'none';
+                            statusText.textContent = `❌ Помилка доступу до камери. Надайте дозвіл та оновіть сторінку. Помилка: ${err}`;
+                            closeButton.style.display = 'block';
+                        });
+                };
+                
+                startButton.onclick = startScanner;
 
             } catch (e) {
-                document.body.innerHTML = `<div style="color:white;text-align:center;padding:20px;">Критична помилка.</div>`;
+                document.body.innerHTML = `<div style="color:white;text-align:center;padding:20px;">Критична помилка: ${e.message}</div>`;
             }
         });
     </script>
 </body>
 </html>
+
