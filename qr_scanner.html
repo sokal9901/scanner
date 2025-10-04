@@ -9,74 +9,61 @@
             margin: 0; padding: 0; height: 100vh; width: 100vw;
             overflow: hidden; background-color: #000;
         }
-        #video-container {
-            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            display: none; /* Hidden until camera starts */
-        }
-        #video-element {
-            width: 100%; height: 100%; object-fit: cover;
-        }
-        #message-container {
-            display: flex; /* Shown by default for loading/error messages */
-            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+        #reader { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+        #reader video { width: 100%; height: 100%; object-fit: cover; }
+        #result-container {
+            display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%;
             background-color: #1c1c1e; z-index: 100;
             flex-direction: column; align-items: center; justify-content: center;
             text-align: center; font-size: 1.5em; color: white;
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
         }
         #close-button {
-            margin-top: 20px; padding: 15px 30px; font-size: 1.1em;
+            margin-top: 20px; padding: 15px 30px; font-size: 1em;
             color: white; background-color: #007bff; border: none;
-            border-radius: 12px; cursor: pointer;
+            border-radius: 8px; cursor: pointer;
         }
     </style>
 </head>
 <body>
-    <div id="video-container">
-        <video id="video-element" playsinline></video>
+    <div id="reader"></div>
+    <div id="result-container">
+        <p id="result-text"></p>
+        <button id="close-button">Повернутись у бот</button>
     </div>
-
-    <div id="message-container">
-        <p id="status-text"></p>
-        <button id="close-button" style="display: none;">Повернутись у бот</button>
-    </div>
-
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@zxing/browser@0.1.4/umd/zxing-browser.min.js"></script>
+    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
     <script>
         document.addEventListener('DOMContentLoaded', () => {
             try {
+                // --- ВАЖЛИВО! URL вашої Google Cloud Function ---
                 const FUNCTION_URL = 'https://europe-west3-termin-pridatnosti.cloudfunctions.net/telegramBotHandler';
+                // ---------------------------------------------
 
-                const videoContainer = document.getElementById('video-container');
-                const videoElement = document.getElementById('video-element');
-                const messageContainer = document.getElementById('message-container');
-                const statusText = document.getElementById('status-text');
+                const readerDiv = document.getElementById('reader');
+                const resultContainer = document.getElementById('result-container');
+                const resultText = document.getElementById('result-text');
                 const closeButton = document.getElementById('close-button');
-                
                 let scanSuccessful = false;
-                const tg = window.Telegram.WebApp;
                 
-                const codeReader = new ZXingBrowser.BrowserMultiFormatReader();
+                window.Telegram.WebApp.ready();
+                window.Telegram.WebApp.expand();
+                
+                const tg = window.Telegram.WebApp;
 
-                tg.ready();
-                tg.expand();
+                closeButton.onclick = function() { tg.close(); };
 
-                closeButton.onclick = () => {
-                    codeReader.reset();
-                    tg.close();
-                };
-
-                const onScanSuccess = async (decodedText) => {
+                async function onScanSuccess(decodedText) {
                     if (scanSuccessful) return;
                     scanSuccessful = true;
                     
-                    codeReader.reset();
-                    videoContainer.style.display = 'none';
+                    try {
+                        await html5QrCode.stop();
+                    } catch (err) { console.error("Помилка зупинки камери:", err); }
 
-                    messageContainer.style.display = 'flex';
-                    statusText.textContent = `✅ Відскановано. Надсилаю...`;
-                    closeButton.style.display = 'block';
+                    readerDiv.style.display = 'none';
+                    resultContainer.style.display = 'flex';
+                    resultText.textContent = `✅ Відскановано. Надсилаю...`;
                     if (navigator.vibrate) navigator.vibrate(100);
 
                     try {
@@ -86,54 +73,29 @@
                             body: JSON.stringify({ barcode: decodedText, initData: tg.initData })
                         });
                         if (response.ok) {
-                            statusText.textContent = `✅ Надіслано!`;
+                            resultText.textContent = `✅ Надіслано!`;
                             setTimeout(() => tg.close(), 1000);
                         } else {
-                            statusText.textContent = `❌ Помилка відправки.`;
+                            resultText.textContent = `❌ Помилка відправки.`;
                         }
                     } catch (error) {
-                        statusText.textContent = `❌ Помилка мережі. Перевірте інтернет.`;
+                        resultText.textContent = `❌ Помилка мережі. Перевірте інтернет.`;
                     }
-                };
+                }
 
-                const startScanner = async () => {
-                    statusText.textContent = 'Запит доступу до камери...';
-                    
-                    try {
-                        const constraints = { video: { facingMode: 'environment' } };
-                        
-                        // This starts the stream and asks for permission
-                        await codeReader.decodeFromConstraints(constraints, 'video-element', (result, err) => {
-                            if (result) {
-                                onScanSuccess(result.getText());
-                            }
-                            // Check error by name instead of instanceof to avoid type errors
-                            if (err && err.name !== 'NotFoundException') {
-                                console.error('Scan Error:', err);
-                            }
-                        });
-                        
-                        // If the above line doesn't throw an error, the camera is active.
-                        messageContainer.style.display = 'none';
-                        videoContainer.style.display = 'block';
+                const html5QrCode = new Html5Qrcode("reader");
+                const config = { fps: 10, qrbox: { width: 280, height: 150 } };
 
-                    } catch (err) {
-                        console.error("Camera start error:", err);
-                        videoContainer.style.display = 'none';
-                        messageContainer.style.display = 'flex';
-                        statusText.textContent = `❌ Помилка доступу до камери. Надайте дозвіл у налаштуваннях браузера та оновіть сторінку.`;
-                        closeButton.style.display = 'block';
-                    }
-                };
-                
-                // Start the scanner automatically on page load
-                startScanner();
+                html5QrCode.start({ facingMode: "environment" }, config, onScanSuccess)
+                    .catch(err => {
+                        resultContainer.style.display = 'flex';
+                        resultText.textContent = `Помилка доступу до камери. Надайте дозвіл.`;
+                    });
 
             } catch (e) {
-                document.body.innerHTML = `<div style="color:white;text-align:center;padding:20px;">Критична помилка: ${e.message}</div>`;
+                document.body.innerHTML = `<div style="color:white;text-align:center;padding:20px;">Критична помилка.</div>`;
             }
         });
     </script>
 </body>
 </html>
-
