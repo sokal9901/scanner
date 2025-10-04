@@ -38,14 +38,12 @@
             color: white; background-color: #007bff; border: none;
             border-radius: 8px; cursor: pointer;
         }
-        /* --- NEW SCANNER OVERLAY STYLES --- */
         #qr-scanner-overlay {
             position: absolute;
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
-            width: 280px; /* Should match qrbox width */
-            height: 150px; /* Should match qrbox height */
+            /* Dimensions will be set by JS */
             border: 2px solid rgba(255, 255, 255, 0.7);
             box-shadow: 0 0 0 4000px rgba(0, 0, 0, 0.5);
             border-radius: 8px;
@@ -65,14 +63,25 @@
             50% { top: calc(100% - 2px); }
             100% { top: 0; }
         }
+        #qr-scanner-hint {
+            position: absolute;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: white;
+            background-color: rgba(0,0,0,0.6);
+            padding: 8px 15px;
+            border-radius: 8px;
+            font-size: 0.9em;
+        }
     </style>
 </head>
 <body>
     <div id="reader">
-        <!-- The overlay will be visible when the reader is shown -->
         <div id="qr-scanner-overlay" style="display: none;">
             <div class="scanner-line"></div>
         </div>
+        <div id="qr-scanner-hint" style="display: none;">Розмістіть штрих-код у рамці</div>
     </div>
     <div id="message-container" class="container">
         <button id="start-button">Активувати камеру</button>
@@ -89,6 +98,7 @@
 
                 const readerDiv = document.getElementById('reader');
                 const scannerOverlay = document.getElementById('qr-scanner-overlay');
+                const scannerHint = document.getElementById('qr-scanner-hint');
                 const messageContainer = document.getElementById('message-container');
                 const startButton = document.getElementById('start-button');
                 const statusText = document.getElementById('status-text');
@@ -116,6 +126,7 @@
 
                     readerDiv.style.display = 'none';
                     scannerOverlay.style.display = 'none';
+                    scannerHint.style.display = 'none';
                     messageContainer.style.display = 'flex';
                     startButton.style.display = 'none';
                     statusText.textContent = `✅ Відскановано. Надсилаю...`;
@@ -151,26 +162,40 @@
                     messageContainer.style.display = 'none';
                     readerDiv.style.display = 'block';
                     scannerOverlay.style.display = 'block';
+                    scannerHint.style.display = 'block';
 
-                    // --- NEW: iOS FIX ---
-                    // This observer ensures the 'playsinline' attribute is set on the video element,
-                    // which is crucial for correct video handling in iOS WebViews.
                     const observer = new MutationObserver((mutationsList, observer) => {
                         for(const mutation of mutationsList) {
                             if (mutation.type === 'childList') {
                                 const videoElement = readerDiv.querySelector('video');
                                 if (videoElement) {
                                     videoElement.setAttribute('playsinline', '');
-                                    observer.disconnect(); // We only need to do this once
+                                    observer.disconnect();
                                 }
                             }
                         }
                     });
                     observer.observe(readerDiv, { childList: true });
 
+                    const formatsToSupport = [
+                        Html5QrcodeSupportedFormats.EAN_13,
+                        Html5QrcodeSupportedFormats.EAN_8,
+                        Html5QrcodeSupportedFormats.UPC_A,
+                        Html5QrcodeSupportedFormats.UPC_E,
+                        Html5QrcodeSupportedFormats.CODE_128
+                    ];
+
                     const config = { 
                         fps: 10, 
-                        qrbox: { width: 280, height: 150 }
+                        qrbox: (viewfinderWidth, viewfinderHeight) => {
+                            const minEdge = Math.min(viewfinderWidth, viewfinderHeight);
+                            let width = Math.floor(minEdge * 0.8);
+                            let height = Math.floor(width * 0.5); // Rectangular shape for barcodes
+                            scannerOverlay.style.width = `${width}px`;
+                            scannerOverlay.style.height = `${height}px`;
+                            return { width: width, height: height };
+                        },
+                        formatsToSupport: formatsToSupport
                     };
                     
                     html5QrCode.start({ facingMode: "environment" }, config, onScanSuccess, onScanFailure)
@@ -178,6 +203,7 @@
                             console.error("Camera start error:", err);
                             readerDiv.style.display = 'none';
                             scannerOverlay.style.display = 'none';
+                            scannerHint.style.display = 'none';
                             messageContainer.style.display = 'flex';
                             startButton.style.display = 'none';
                             statusText.textContent = `❌ Помилка доступу до камери. Надайте дозвіл та оновіть сторінку. Помилка: ${err}`;
